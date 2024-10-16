@@ -5,11 +5,16 @@ use petgraph::{csr::DefaultIx, graph::NodeIndex, Graph};
 use petgraph_graphml::GraphMl;
 use regex::Regex;
 use std::{
-    cmp::max, fmt::Display, fs::{self, OpenOptions}, hash::Hash, io::Write, path::Path
+    cmp::max,
+    fmt::Display,
+    fs::{self, OpenOptions},
+    hash::Hash,
+    io::Write,
+    path::Path,
 };
 use walkdir::WalkDir;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use cmd_lib::run_cmd;
 
 #[derive(Hash, Clone, Eq, PartialEq)]
@@ -47,7 +52,6 @@ impl<T: Hash + Eq + Clone> SpaceConsumingGraph<T> {
                 Some(index)
             })
             .unwrap()
-            .clone()
     }
 
     fn add_edge(&mut self, first: T, second: T) {
@@ -61,14 +65,20 @@ impl<T: Hash + Eq + Clone> SpaceConsumingGraph<T> {
 }
 
 trait U32Representable {
-    fn represent(&self) -> u32;
+    fn represent(&self) -> Result<u32>;
 }
 
 impl U32Representable for SequenceName {
-    fn represent(&self) -> u32 {
+    fn represent(&self) -> Result<u32> {
         let prefix_stripped_str: String = self.0.chars().skip(1).collect();
 
-        str::parse::<u32>(&prefix_stripped_str).expect("Could not parse prefix_stripped_str")
+        str::parse::<u32>(&prefix_stripped_str)
+            .map_err(|_| {
+                anyhow!(
+                    "Could not read value {0} stripped as {prefix_stripped_str}",
+                    self.0
+                )
+            })
     }
 }
 
@@ -82,19 +92,34 @@ fn create_rawbin<T: U32Representable + Eq + Hash>(graph: &SpaceConsumingGraph<T>
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(Path::new("./output.bin"))?;
 
     for node in nodes {
-        writer.write(&[1u8])?;
-        writer.write(&node.weight.represent().to_le_bytes())?;
-        write!(writer, "\n")?;
+        writer.write_all(&[1u8])?;
+        writer.write_all(&node.weight.represent()?.to_le_bytes())?;
+        writeln!(writer)?;
     }
 
     for edge in edges {
-        writer.write(&[0u8])?;
-        writer.write(&graph.map.get_by_right(&edge.source()).unwrap().represent().to_le_bytes())?;
-        writer.write(&graph.map.get_by_right(&edge.target()).unwrap().represent().to_le_bytes())?;
-        write!(writer, "\n")?;
+        writer.write_all(&[0u8])?;
+        writer.write_all(
+            &graph
+                .map
+                .get_by_right(&edge.source())
+                .unwrap()
+                .represent()?
+                .to_le_bytes(),
+        )?;
+        writer.write_all(
+            &graph
+                .map
+                .get_by_right(&edge.target())
+                .unwrap()
+                .represent()?
+                .to_le_bytes(),
+        )?;
+        writeln!(writer)?;
     }
 
     println!("Wrote rawbin file!");
@@ -115,6 +140,7 @@ fn create_graphmlz<T: Display>(graph: &SpaceConsumingGraph<T>) -> Result<()> {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(output_path)?,
     ))?;
 
@@ -122,7 +148,8 @@ fn create_graphmlz<T: Display>(graph: &SpaceConsumingGraph<T>) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let sequence_name_matching_regex = Regex::new(r"A\d{6,}").unwrap();
+    // future proof this!
+    let sequence_name_matching_regex = Regex::new(r"A\d{6,8}").unwrap();
 
     if !Path::new("./output").exists() {
         // Note: this requires that git-lfs is installed.
