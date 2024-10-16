@@ -97,6 +97,8 @@ fn create_rawbin<T: U32Representable + Eq + Hash>(graph: &SpaceConsumingGraph<T>
         write!(writer, "\n")?;
     }
 
+    println!("Wrote rawbin file!");
+
     Ok(())
 }
 
