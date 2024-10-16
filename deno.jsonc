@@ -1,5 +1,0 @@
-{
-    "tasks": {
-        "fetch": "deno run --allow-env --allow-net=github.com --allow-run=git,stat --allow-write=. --allow-read fetch.ts"
-    }
-}
