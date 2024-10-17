@@ -1,7 +1,7 @@
 name: Generate Data
 on:
   # Schedule daily updates
-  schedule: [{cron: "*/30 * * * *"}]
+  schedule: [{cron: "1 1 * * *"}]
   # (optional) Run workflow manually
   workflow_dispatch:
   # Run workflow when pushing on main
