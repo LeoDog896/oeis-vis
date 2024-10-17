@@ -1,6 +1,6 @@
 use bimap::BiMap;
-use brotlic::CompressorWriter;
 use indicatif::ProgressBar;
+use lz4_flex::frame::FrameEncoder;
 use petgraph::{csr::DefaultIx, graph::NodeIndex, Graph};
 use petgraph_graphml::GraphMl;
 use regex::Regex;
@@ -72,28 +72,29 @@ impl U32Representable for SequenceName {
     fn represent(&self) -> Result<u32> {
         let prefix_stripped_str: String = self.0.chars().skip(1).collect();
 
-        str::parse::<u32>(&prefix_stripped_str)
-            .map_err(|_| {
-                anyhow!(
-                    "Could not read value {0} stripped as {prefix_stripped_str}",
-                    self.0
-                )
-            })
+        str::parse::<u32>(&prefix_stripped_str).map_err(|_| {
+            anyhow!(
+                "Could not read value {0} stripped as {prefix_stripped_str}",
+                self.0
+            )
+        })
     }
 }
 
 fn create_rawbin<T: U32Representable + Eq + Hash>(graph: &SpaceConsumingGraph<T>) -> Result<()> {
-    println!("Writing rawbin data to output.bin...");
+    println!("Writing compressed rawbin data to output.bin...");
 
     let nodes = graph.graph.raw_nodes();
     let edges = graph.graph.raw_edges();
 
-    let mut writer = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(Path::new("./output.bin"))?;
+    let mut writer = FrameEncoder::new(
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(Path::new("./output.bin"))?,
+    );
 
     for node in nodes {
         writer.write_all(&[1u8])?;
@@ -132,10 +133,10 @@ fn create_graphmlz<T: Display>(graph: &SpaceConsumingGraph<T>) -> Result<()> {
 
     let graph_ml = GraphMl::new(&graph.graph).export_node_weights_display();
 
-    let output_path = Path::new("output.graphmlz");
+    let output_path = Path::new("output.graphml.lz4");
     println!("Writing compressed form...");
 
-    graph_ml.to_writer(CompressorWriter::new(
+    graph_ml.to_writer(FrameEncoder::new(
         OpenOptions::new()
             .read(true)
             .write(true)

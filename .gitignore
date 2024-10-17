@@ -1,5 +1,5 @@
 output
-output.graphmlz
+output.graphml.lz4
 output.bin
 
 /target
