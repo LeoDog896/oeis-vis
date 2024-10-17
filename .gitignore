@@ -2,4 +2,4 @@ output
 output.graphml.lz4
 output.bin
 
-/target
+target
